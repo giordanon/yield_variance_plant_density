@@ -1,0 +1,69 @@
+---
+title: "24. run MCMC"
+format: html
+editor: visual
+---
+
+```{r message = FALSE, warning = FALSE}
+source("MCMC REFINED.R")
+library(multidplyr)
+library(tidyverse)
+```
+
+Read data
+
+```{r}
+data <- readRDS("../data/data_ye2.RData") %>% 
+  rename_all(~str_replace(.,"2","")) %>% 
+  filter(SOURCE == "Kansas")
+```
+
+Define local variables
+
+```{r}
+parameterStart <- c("b1" = 0.05,
+                    "AOPD" = 150,
+                    "a1" = 0.020,
+                    "maxVPD" = 50,
+                    "minVPD" = 150)
+
+sigmaTune <- c(0.005,10, 0.005,10,10)
+
+iterations <- 1e6
+burnIn <- 0.2
+thinning <- 5
+groups <- c("YE", "TRT", "CLEAN")
+
+# Load custom functions and local variables into clusters
+environment <- c( 
+  # MCMC algorithm
+  "metropolisMCMC",
+  # Prelim MCMC stuff
+  "parameterStart","sigmaTune","iterations", "burnIn","thinning", 
+  # Functions
+  "quadPlateau","expPlateau","likelihood", "priors", "posterior","proposalFunction"
+)
+```
+
+
+```{r}
+runSplits(data, groups, iterations, burnIn, thinning, parameterStart,sigmaTune, environment)
+```
+
+
+```{r}
+model <- readRDS("../output/model/model.RData")
+tracePlots(model)
+```
+
+Extract model summaries
+
+```{r}
+model <- readRDS("../output/model/model.RData")
+step <-1
+getSummaries(model, groups, step)
+
+```
+
+
+
