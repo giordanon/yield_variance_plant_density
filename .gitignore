@@ -8,5 +8,5 @@
 !*/
 !code/**/*
 !data/**/*
-!output/
+!output/**/*
 .Rproj.user
