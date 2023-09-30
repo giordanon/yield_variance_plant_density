@@ -151,7 +151,7 @@ runSplits <- function(data,
   
   
   
-  filename = paste(groups, collapse = "_")
+  #filename = paste(groups, collapse = "_")
   # Parallel processing
   cores = ifelse(nrow(unique(data[groups]))>16,16,nrow(unique(data[groups])))
   cluster <- new_cluster(cores)
@@ -233,16 +233,18 @@ modelSum <- function(mod, step, xmax){
         
         draw = mod[i,]
         
-        a1 = draw[1]
-        maxVPD = draw[2]
-        minVPD = draw[3]
-        b1 = draw[4]
-        AOPD = draw[5]
+        b1 = draw[1]
+        AOPD = draw[2]
+        
+        a1 = draw[3]
+        maxVPD = draw[4]
+        minVPD = draw[5]
+        
         
         var_pred = expPlateau(a1, maxVPD, minVPD, x)
         mean_pred = quadPlateau(b1,AOPD, x)
         
-        pi_draw = rnorm(1, mean_pred, var_pred)
+        pi_draw = rnorm(1, mean_pred, sqrt(var_pred))
         
         est_int[i,] = c(var_pred, mean_pred)
         pred_int[i,] = pi_draw
@@ -282,7 +284,6 @@ modelSum <- function(mod, step, xmax){
 
 getSummaries <- function(mod, groups, step){
   
-  filename = paste(groups, collapse = "_")
   
   # Parallel processing
   cores = ifelse(nrow(unique(mod[groups]))>16,16,nrow(unique(mod[groups])))
