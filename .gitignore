@@ -1,0 +1,11 @@
+# Ignore everything
+*
+
+# But not these files...
+!.gitignore
+!ST-PROJECT2.Rproj
+!README.md
+!*/
+!code/**/*
+!data/**/*
+.Rproj.user
