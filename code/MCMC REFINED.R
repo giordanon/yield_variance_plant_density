@@ -65,10 +65,10 @@ priors <- function(parameters){
   aprior = dunif(a1, min = 0, max = 0.05, log = T)
   # minVPD
   # Upper bound from Canadian data 192
-  minVPDprior = dunif(minVPD, min = 10, max = 192, log = T)
+  minVPDprior = dunif(minVPD, min = 10, max = 501, log = T)
   # maxVPD
   # Upper bound from Canadian data 124
-  maxVPDprior = dunif(maxVPD, min = 10, max = 124, log = T)
+  maxVPDprior = dunif(maxVPD, min = 10, max = 501, log = T)
   
   return(bprior+AOPDprior+aprior+minVPDprior+maxVPDprior)
 }
@@ -139,8 +139,9 @@ runSplits <- function(data,
                       thinning,
                       startValue,
                       sigmaTune,
-                      environment
-){
+                      environment, 
+                      filename
+                      ){
   
   
   iterations <- iterations
@@ -149,13 +150,10 @@ runSplits <- function(data,
   startValue <- startValue
   sigmaTune <- sigmaTune
   
-  
-  
-  #filename = paste(groups, collapse = "_")
   # Parallel processing
   cores = ifelse(nrow(unique(data[groups]))>16,16,nrow(unique(data[groups])))
   cluster <- new_cluster(cores)
-  cluster_library(cluster, c("dplyr", "purrr"))
+  cluster_library(cluster, c("dplyr", "purrr", "truncnorm"))
   cluster_copy(cluster, environment)
   
   # Set seed
@@ -176,9 +174,9 @@ runSplits <- function(data,
     ) %>%
     dplyr::collect() %>% 
     ungroup() %>% 
-    saveRDS(paste0("../output/model/model.RData"))
+    saveRDS(paste0("../output/model/",filename,".RData"))
   
-  return(paste0("../output/model/model.RData"))
+  return(paste0("../output/model/",filename,".RData"))
 }
 
 

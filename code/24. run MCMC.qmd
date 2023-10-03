@@ -9,7 +9,96 @@ source("MCMC REFINED.R")
 library(multidplyr)
 library(tidyverse)
 library(tidybayes)
+library(truncnorm)
 ```
+
+Run for canadian data
+
+```{r}
+data <- readRDS("../data/data_ye2.RData") %>% 
+  rename_all(~str_replace(.,"2","")) %>% 
+  filter(SOURCE == "Canada")
+```
+
+```{r}
+parameterStart <- c("b1" = 0.05,
+                    "AOPD" = 150,
+                    "a1" = 0.020,
+                    "maxVPD" = 50,
+                    "minVPD" = 150)
+
+sigmaTune <- c(0.005,10, 0.005,10,10)
+
+iterations <- 1e6
+burnIn <- 0.2
+thinning <- 5
+groups <- c("SOURCE")
+
+# Load custom functions and local variables into clusters
+environment <- c( 
+  # MCMC algorithm
+  "metropolisMCMC",
+  # Prelim MCMC stuff
+  "parameterStart","sigmaTune","iterations", "burnIn","thinning", 
+  # Functions
+  "quadPlateau","expPlateau","likelihood", "priors", "posterior","proposalFunction"
+  )
+```
+
+```{r}
+runSplits(data, groups, iterations,
+          burnIn, thinning, parameterStart,
+          sigmaTune, environment, "model_canada")
+```
+
+```{r}
+model <- readRDS("../output/model/model_canada.RData")
+tracePlots(model)
+
+q99 <- apply(model$mod[[1]], 2, quantile ,probs = .99)
+q50 <- apply(model$mod[[1]], 2, quantile ,probs = .5)
+q01 <- apply(model$mod[[1]], 2, quantile ,probs = .001)
+
+estimateSD <- function(q50, q99) {
+  z99 <- 2.576
+  
+  # Calculate using the 99th percentile
+  sd <- (q99 - q50) / z99
+  
+  return(c(sd))
+}
+
+sd <-  estimateSD(q50, q99)
+
+
+priors <- function(parameters){
+  
+  b1 = parameters[1]
+  AOPD = parameters[2]
+  
+  a1 = parameters[3]
+  maxVPD = parameters[4]
+  minVPD = parameters[5]
+  
+  # Specify priors
+  # b1
+  bprior = log(dtruncnorm(b1,mean = q50["b1"], sd = sd["b1"], a = 0, b = 0.2))
+  #AOPD
+  AOPDprior = log(dtruncnorm(AOPD,mean = q50["AOPD"], sd = sd["AOPD"], a = 10, b = 200 ))
+  # a1
+  aprior = log(dtruncnorm(a1,mean = q50["a1"], sd = sd["a1"],a = 0 , b = q99["a1"]))
+  # minVPD
+  # Upper bound from Canadian data 192
+  minVPDprior = log(dtruncnorm(minVPD,mean = q50["minVPD"], sd = sd["minVPD"],a = 0, b = q99["minVPD"]))
+  # maxVPD
+  # Upper bound from Canadian data 124
+  maxVPDprior = log(dtruncnorm(maxVPD,mean = q50["maxVPD"], sd = sd["maxVPD"],a = 0, b = q99["maxVPD"]))
+  
+  return(bprior+AOPDprior+aprior+minVPDprior+maxVPDprior)
+}
+```
+
+Run Kansas data
 
 Read data
 
@@ -23,7 +112,7 @@ Define local variables
 
 ```{r}
 parameterStart <- c("b1" = 0.05,
-                    "AOPD" = 150,
+                    "AOPD" = 120,
                     "a1" = 0.020,
                     "maxVPD" = 50,
                     "minVPD" = 150)
@@ -40,7 +129,9 @@ environment <- c(
   # MCMC algorithm
   "metropolisMCMC",
   # Prelim MCMC stuff
-  "parameterStart","sigmaTune","iterations", "burnIn","thinning", 
+  "parameterStart","sigmaTune","iterations", "burnIn","thinning",
+  # Canadian priors info
+  "q50", "sd","q99",
   # Functions
   "quadPlateau","expPlateau","likelihood", "priors", "posterior","proposalFunction"
 )
@@ -48,49 +139,24 @@ environment <- c(
 
 
 ```{r}
-runSplits(data, groups, iterations, burnIn, thinning, parameterStart,sigmaTune, environment)
+runSplits(data, groups, iterations, burnIn, thinning, parameterStart,sigmaTune, environment, filename = "model_kansas")
 ```
 
 
 ```{r}
-model <- readRDS("../output/model/model.RData")
+model <- readRDS("../output/model/model_kansas.RData")
 tracePlots(model)
 ```
 
 Extract model summaries
 
 ```{r}
-model <- readRDS("../output/model/model.RData")
+model <- readRDS("../output/model/model_kansas.RData")
 step <- 1
 groups <- c("YE", "TRT", "CLEAN")
 getSummaries(model, groups, step)
 
 ```
-
-
-```{r}
-
-test <- readRDS("../output/model/summaries.RData")[2,]$mod[[1]]
-
-rnormBound <- function(n, mean = 0, sd = 1, lower = -Inf, upper = Inf) {
-  samples <- numeric(n)
-  for (i in seq_len(n)) {
-    repeat {
-      value <- rnorm(1, mean, sd)
-      if (value >= lower && value <= upper) {
-        samples[i] <- value
-        break
-      }
-    }
-  }
-  samples
-}
-
-samples <- rnormBound(1000, mean=0, sd=1, lower=-3, upper=3)
-
-hist(samples)
-```
-
 
 
 
