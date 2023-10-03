@@ -3,27 +3,37 @@ title: "Untitled"
 format: html
 editor: visual
 ---
+## Set up environment, functions and local variables
 
-FIG 3
+```{r setup, message = F}
+library(tidyverse)
+library(tidybayes)
+library(patchwork)
+library(cowplot)
+library(extrafont)
+library(ggpubr)
 
-Unedited version of Fig 3
+source("functions.R")
+source("MCMC REFINED.R")
 
-```{r}
-readRDS(sum_path)$mod_sum[[1]]
-```
 
-```{r  fig.width=14, fig.height=8}
-
+data <- readRDS("../data/data_ye2.RData")
+# Local variables
 sum_path<- paste0("../output/model/summaries.RData")
-
-#data <- readRDS("../data/data_ye2.RData")
-# Plot template
 violeta <- '#75338a'
 naranja <- '#de870d'
-coef <- 6
+trt_levels <- c("Treated_Heavy","Treated_Moderate", "Treated_Light", "None_Heavy","None_Moderate")
 
 
+```
 
+# Main body
+
+## Figure 3
+
+Process model all splits
+
+```{r  fig.width=14, fig.height=8}
 min_stand <- 
 data %>% 
   group_by(SOURCE, YE, TRT, CLEAN) %>% 
@@ -132,5 +142,264 @@ ggplot()+
 p2split
 
 #ggsave(plot = p2split , "../output/plots/paper/Fig4_.svg", width = 14, height = 8)
-sum_df$mod_sum[[1]]
+
 ```
+
+
+## Figure 4
+
+Yield differences between treatments
+
+Accommodate data and generate summaries
+
+```{r fig.width=3.7, fig.height=4}
+comp <- 
+readRDS(sum_path) %>% 
+  #filter(YE == 3.37) %>% 
+  mutate(.,
+         mod  = map(mod,
+                        ~mod_predict(.x))
+         )
+
+comp2<-
+comp[, c("YE", "TRT", "CLEAN", "mod")] %>% 
+  pivot_wider(names_from = c(TRT, CLEAN), values_from = mod) %>% 
+  pivot_longer(cols = -c(None_Light, YE), values_to = "VAL", names_to = "Treatment") %>% 
+  mutate(.,
+         pred = pmap(list(..1 = None_Light, ..2 = VAL), 
+                        ~as.data.frame(..2 - ..1)
+                        ), 
+         
+         p = map(pred, 
+                       function(pred){
+                        psd  <- sum(ifelse(pred[,"sd"] > 0,1,0))/nrow(pred)
+                        pmean <-  sum(ifelse(pred[,"mean"] > 0,1,0))/nrow(pred)
+                        return(as.data.frame(cbind(var = psd, mean = pmean)))
+                       }
+                 )
+         ) %>% 
+  filter(Treatment == "Treated_Heavy")
+
+# Free unuused memory
+rm(comp)
+gc()
+
+comp2_sum <-
+comp2[, c("YE","Treatment", "pred")] %>% 
+  #mutate(Treatment = fct_relevel(as.factor(Treatment), trt_levels)) %>% 
+  unnest(cols = c(pred)) %>% 
+  #Transform variance to SD
+  pivot_longer(cols = c(sd, mean))
+
+points<- 
+comp2_sum %>% 
+  group_by(YE,Treatment, name) %>% 
+  summarise_at(vars(value), list(q500 = ~round(median(.),1), 
+                                 q975  = ~round(quantile(., probs = 0.975),1), 
+                                 q025  = ~round(quantile(., probs = 0.025),1) 
+                                 )
+               )
+```
+
+Plot figure 4
+
+```{r fig.width=6, fig.height = 4}
+p3 <- 
+comp2_sum %>% 
+  ggplot()+
+  stat_halfeye(aes(value, name, fill=name), 
+               .width = 0, alpha = 0.4, height = 0.4, 
+                  size = 0.7, point_alpha = 0)+
+  geom_linerange(data = points,
+                 aes(xmin = q025, xmax = q975, y=name, color = name, group = name), 
+                 linewidth = 1.6, 
+                 lineend = "round",
+                 alpha=0.8)+
+  geom_point(data = points,aes(y = name, x = q500, fill = name), shape = 21, size=3, stroke = 1.5)+
+  
+  
+  geom_vline(xintercept = 0, linetype = "dashed")+
+  coord_flip()+
+  facet_wrap(~YE)+
+  scale_fill_manual(values = c(violeta, naranja))+
+  scale_color_manual(values = c(violeta, naranja))+
+  guides(fill = "none", color = "none")+
+  labs(y = "", x = expression(Delta~paste("Yield (",Mg~ha^-1,")")))+
+  theme_custom()+
+  theme(#strip.text.x = element_blank(), 
+        #strip.text.y = element_blank(), 
+        axis.title = element_text(size=10)
+  )
+p3
+#ggsave(plot = p3 , "../output/plots/paper/Yield AOPD and Var minRPD.svg", width = 3, height = 4)
+
+
+```
+
+## Figure 5C, 5D
+
+```{r}
+comp3 <-
+  readRDS(sum_path)[,c("YE","TRT", "CLEAN", "mod")] %>% 
+  
+  
+  pivot_wider(names_from = c(TRT, CLEAN), values_from = mod) %>% 
+  pivot_longer(cols = -c(None_Light, YE), values_to = "VAL", names_to = "Treatment") %>% 
+  mutate(., 
+         posterior = pmap(list(..1 = None_Light, ..2 = VAL), 
+                        ~as.data.frame(..2 - ..1)
+                        ), 
+         p = map(posterior, 
+                       function(posterior){
+                        p <-  apply(posterior , MARGIN = 2, FUN = function(param){
+                          sum(ifelse(param > 0,1,0))/nrow(posterior)
+                          })
+                        
+                        return(data.frame(a1 = p["a1"], maxVPD = p["maxVPD"], minVPD = p["minVPD"], b1 = p["b1"], AOPD = p["AOPD"]))
+                        }
+                 )
+         ) %>% 
+  rename(treated = "VAL") %>% 
+  filter(Treatment == "Treated_Heavy")
+
+
+
+label <- comp3[,c("YE","Treatment", "p")] %>% 
+  unnest(cols = c(p)) %>% 
+   pivot_longer(cols = c(a1:AOPD)) %>% 
+   filter(name %in% c("minVPD", "AOPD")) %>% 
+   mutate(Treatment = fct_relevel(as.factor(Treatment), trt_levels)
+          #label = case_when(name == "minRPD"~"D", T~"C")
+          )
+
+comp3_sum<-
+comp3[,c("YE","Treatment","posterior")] %>% 
+  mutate(Treatment = fct_relevel(as.factor(Treatment), trt_levels)) %>% 
+  unnest(cols = c(posterior)) %>% 
+  # Filter parameters of interest
+  pivot_longer(cols = c(b1:minVPD)) %>%
+  filter(name %in% c("minVPD", "AOPD"))
+
+points3<- 
+comp3_sum %>% 
+  group_by(YE,Treatment, name) %>% 
+  summarise_at(vars(value), list(q500 = ~round(median(.),1), 
+                                 q975  = ~round(quantile(., probs = 0.975),1), 
+                                 q025  = ~round(quantile(., probs = 0.025),1) 
+                                 )
+               )
+
+```
+
+
+```{r}
+p4<-
+comp3_sum %>% 
+  ggplot()+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+  stat_halfeye(aes(y=value, x=name, fill= name), 
+               .width = 0, alpha = 0.4, height = 0.4, 
+                  size = 0.7, point_alpha = 0)+
+  #coord_flip()+
+  geom_linerange(data = points3,
+                 aes(ymin = q025, ymax = q975, x=name, color = name, group = name),
+                 linewidth = 1.6, 
+                 lineend = "round",
+                 alpha=0.8)+
+  geom_point(data = points3,
+             aes(x = name, y = q500, fill = name), shape = 21, size=3, stroke = 1.5)+
+  
+
+  geom_text(data = label,
+            aes(label = paste0(" p (y > 0) = ", round(value, 3)),x=name, color = name),
+                 fontface = "bold",size=3.5,
+                 y= Inf, vjust = 1.2, hjust = 0.5)+
+  geom_text(data = label,
+            aes(label = "B"),
+                 fontface = "bold",size=6,
+                 x = -Inf, y= Inf, vjust = 1.2, hjust =-0.25)+
+  
+  facet_wrap(~YE)+
+  
+  scale_fill_manual(values = c(violeta, naranja))+
+  scale_color_manual(values = c(violeta, naranja))+
+  scale_y_continuous(breaks = seq(-50,150,50), limits = c(-60,125))+
+
+  guides(fill = "none", color = "none")+
+  labs(x="",y = expression(Delta~paste("Plant Density (",pl~m^-2,")")))+
+  theme_custom()+
+  theme(legend.position = "top")+
+  theme(#strip.text.x = element_blank(), 
+        #strip.text.y = element_blank(), 
+        axis.title = element_text(size=10),
+        panel.spacing = unit(0.6, "cm"),
+        strip.background =element_rect(fill= NA))
+p4
+```
+
+## Figure 5A, 5B
+
+```{r}
+comp4 <- 
+readRDS(sum_path)[,c("YE","TRT", "CLEAN", "mod")] %>% 
+  ungroup() %>% 
+  mutate(.,
+         Treatment = paste0(TRT, "_", CLEAN), 
+         mod = map(mod, ~as.data.frame(.x[,c("minVPD", "AOPD")])),
+         ) %>% 
+  filter(Treatment %in% c("None_Light", "Treated_Heavy") ) %>% 
+  dplyr::select(-c(TRT, CLEAN)) %>% 
+  unnest(c(mod)) 
+
+points4<- 
+comp4 %>% 
+  pivot_longer(c(minVPD, AOPD)) %>% 
+  group_by(YE,Treatment, name) %>% 
+  summarise_at(vars(value), list(q500 = ~round(median(.),1), 
+                                 q975  = ~round(quantile(., probs = 0.975),1), 
+                                 q025  = ~round(quantile(., probs = 0.025),1) 
+                                 )
+               )
+  
+```
+
+```{r}
+
+comp4 %>% 
+  pivot_longer(c(minVPD, AOPD)) %>% 
+  ggplot()+
+  facet_wrap(~YE)+
+  stat_halfeye(aes(y=value, x=Treatment, fill= name),scale = 0.7,
+               .width = 0, position = position_dodge(0.7),alpha = 0.4, height = 0.25, 
+                  size = 0.7, point_alpha = 0)+
+  #coord_flip()+
+  geom_linerange(data = points4, 
+                 aes(ymin = q025, ymax = q975, x=Treatment, color = name, group = name), 
+                 linewidth = 1.6, 
+                 lineend = "round",
+                 alpha=0.8,
+                 position = position_dodge2(.7))+
+  geom_point(data = points4,
+             aes(x = Treatment, y = q500, fill = name), 
+             shape = 21, size=3, stroke = 1.5,position = position_dodge2(.7))+
+  # geom_text(data = p6_label,
+  #           aes(label = "A"),
+  #                fontface = "bold", size=6,
+  #                x = -Inf, y= Inf, vjust = 1.2, hjust =-0.25)+
+  
+  guides(fill = guide_legend(title = ""), color = "none")+
+  scale_fill_manual(values = c(violeta, naranja))+
+  scale_color_manual(values = c(violeta, naranja))+
+  scale_y_continuous(breaks = seq(0,200,50), limits = c(0,200))+
+  labs(y = expression('Plant Density (pl m'^-2~")"),x="")+
+  theme_custom()+
+  theme(legend.position = "top",
+        legend.background = element_blank(),
+        legend.key=element_blank(),
+    
+        strip.text.y = element_text(size = rel(1.5)), 
+        
+        strip.background = element_rect(fill= NA))
+```
+
+

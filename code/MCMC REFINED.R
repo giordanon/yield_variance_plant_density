@@ -46,7 +46,25 @@ likelihood <- function(parameters,
   return(sumll)
 }
 
-# Priors 
+# This funciton allows to get SD from Canadian data posteriors
+estimateSD <- function(q50, q99) {
+  z99 <- 2.576
+  
+  # Calculate using the 99th percentile
+  sd <- (q99 - q50) / z99
+  
+  return(c(sd))
+}
+
+# Canadian data model used for retrieving priors
+model <- readRDS("../output/model/model_canada.RData")
+q99 <- apply(model$mod[[1]], 2, quantile ,probs = .99)
+q50 <- apply(model$mod[[1]], 2, quantile ,probs = .5)
+q01 <- apply(model$mod[[1]], 2, quantile ,probs = .001)
+
+sd <-  estimateSD(q50, q99)
+
+# Priors informing model oming from Canadian data
 priors <- function(parameters){
   
   b1 = parameters[1]
@@ -57,18 +75,18 @@ priors <- function(parameters){
   minVPD = parameters[5]
   
   # Specify priors
-  # B1
-  bprior = dunif(b1, min = 0.001, max = 0.2, log = T)
+  # b1
+  bprior = log(dtruncnorm(b1,mean = q50["b1"], sd = sd["b1"], a = 0, b = 0.2))
   #AOPD
-  AOPDprior = dunif(AOPD, min = 10, max = 400, log = T)
-  # A1
-  aprior = dunif(a1, min = 0, max = 0.05, log = T)
+  AOPDprior = log(dtruncnorm(AOPD,mean = q50["AOPD"], sd = sd["AOPD"], a = 10, b = 200 ))
+  # a1
+  aprior = log(dtruncnorm(a1,mean = q50["a1"], sd = sd["a1"],a = 0 , b = q99["a1"]))
   # minVPD
   # Upper bound from Canadian data 192
-  minVPDprior = dunif(minVPD, min = 10, max = 501, log = T)
+  minVPDprior = log(dtruncnorm(minVPD,mean = q50["minVPD"], sd = sd["minVPD"],a = 0, b = q99["minVPD"]))
   # maxVPD
   # Upper bound from Canadian data 124
-  maxVPDprior = dunif(maxVPD, min = 10, max = 501, log = T)
+  maxVPDprior = log(dtruncnorm(maxVPD,mean = q50["maxVPD"], sd = sd["maxVPD"],a = 0, b = q99["maxVPD"]))
   
   return(bprior+AOPDprior+aprior+minVPDprior+maxVPDprior)
 }
@@ -279,7 +297,7 @@ modelSum <- function(mod, step, xmax){
   return(df)
 }
 
-getSummaries <- function(mod, groups, step){
+getSummaries <- function(mod, groups, step, filename){
   
   
   # Parallel processing
@@ -300,7 +318,7 @@ getSummaries <- function(mod, groups, step){
     dplyr::collect()
   
   
-  outpath <- paste0("../output/model/summaries.RData")
+  outpath <- paste0("../output/model/",filename,".RData")
   
   
   out %>% saveRDS(outpath)  
