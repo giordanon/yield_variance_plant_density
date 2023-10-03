@@ -4,23 +4,133 @@ format: html
 editor: visual
 ---
 
-## Quarto
+FIG 3
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+Unedited version of Fig 3
 
 ```{r}
-1 + 1
+readRDS(sum_path)$mod_sum[[1]]
 ```
 
-You can add options to executable code like this
+```{r  fig.width=14, fig.height=8}
 
-```{r}
-#| echo: false
-2 * 2
+sum_path<- paste0("../output/model/summaries.RData")
+
+#data <- readRDS("../data/data_ye2.RData")
+# Plot template
+violeta <- '#75338a'
+naranja <- '#de870d'
+coef <- 6
+
+
+
+min_stand <- 
+data %>% 
+  group_by(SOURCE, YE, TRT, CLEAN) %>% 
+  summarise_at(vars(STAND), ~min(.,na.rm=T)) %>% 
+  rename(minSTAND = STAND)
+  
+  
+sum_df <- 
+ readRDS(sum_path) %>% 
+  full_join(min_stand) %>% 
+  mutate(mod_sum = pmap(list(..1 = mod_sum, ..2 = minSTAND), 
+                        ~ ..1 %>% mutate(STAND = ifelse(STAND >= ..2, STAND, NA)) %>% 
+                          drop_na()
+                        ))
+
+points2 <- data %>% 
+  ungroup() %>% 
+  mutate(SOURCE = case_when(TRT == "None"& CLEAN=="Light" ~ SOURCE, 
+                             TRT == "Treated"& CLEAN=="Heavy" ~ SOURCE, 
+                             T~NA_character_
+                             )
+         
+         ) %>% 
+  
+  drop_na(SOURCE) %>% 
+  mutate(var = "var", 
+         pred = "pred") %>% 
+  pivot_longer(cols = c(pred, var), names_to = 'estimate', values_to = "value") %>% 
+  mutate(YIELD = case_when(estimate == "pred"~YIELD, T~NA_real_)) %>% 
+  mutate(TRT = paste0(TRT, "_", CLEAN)
+         )
+
+
+label <- unique(points2[,c(1,2,4,5,8)]) %>% 
+  mutate(label = c("C", "D", "A", "B", "E", "F", "G", "H"))
+
+
+p2split <- 
+sum_df %>% 
+  unnest(cols = c(mod_sum)) %>% 
+  mutate(pred_q025r = ifelse(pred_q025<=0,0,pred_q025), 
+         pred_q025 = ifelse(pred_q025<=0,NA,pred_q025)
+         ) %>% 
+  filter(SOURCE %in% c("Kansas")) %>% 
+  mutate(SOURCE = case_when(TRT == "None"& CLEAN=="Light" ~ SOURCE, 
+                             TRT == "Treated"& CLEAN=="Heavy" ~ SOURCE, 
+                             T~NA_character_
+                             )) %>% 
+  drop_na(SOURCE) %>% 
+  
+  mutate_at(vars(var_q500, var_q025,var_q975), ~sqrt(.)) %>% 
+  dplyr::select(STAND, pred_q500, pred_q025r,pred_q975,var_q500, var_q025,var_q975 ) %>% 
+  rename(pred_q025= pred_q025r) %>% 
+  pivot_longer(cols = c(pred_q500:var_q975), 
+               names_sep = "_", 
+               names_to = c("estimate", ".value")
+               
+               ) %>% 
+  mutate(TRT = paste0(TRT, "_", CLEAN), 
+         max_height = case_when(estimate == "pred"~9, 
+                                estimate == "var"~1.3,
+                                ),
+         min_height = case_when(estimate == "pred"~0, 
+                                estimate == "var"~0
+                                )
+         ) %>% 
+
+ggplot()+
+  geom_blank(aes(y = max_height)) +
+  geom_blank(aes(y = min_height)) +
+  geom_point(data = points2,
+           aes(x = STAND, y = YIELD),
+          shape = 21,
+         fill = "black",
+        size = 3, alpha = 0.1
+       )+
+  # Expected value and credible interval for the variance model
+  geom_line(aes(x = STAND, y = q500, group = estimate), color = "black", linewidth = 1)+
+  geom_line(aes(x = STAND, y = q975, color = estimate))+
+  geom_line(aes(x = STAND, y = q025, color = estimate))+
+  geom_ribbon(aes(x = STAND,ymin = q025, ymax = q975, fill = estimate), alpha = 0.2)+
+  
+  geom_text(data = label, 
+            aes(label = label),
+                 fontface = "bold", size=6,
+                 x = -Inf, y= Inf, vjust = 1.2, hjust =-0.25)+
+  
+  scale_fill_manual(values = c(violeta, naranja))+
+  scale_color_manual(values = c(violeta, naranja))+
+
+  guides(color = "none", fill="none")+
+  labs(y = "", x = expression(paste("Plant Density (",pl~m^-2,")")))+
+  facet_wrap(~YE~TRT~estimate, 
+             ncol=4,
+             scales = "free"
+             #strip.position = "left",
+             # labeller = labeller(estimate = as_labeller(estimate_names, label_parsed), 
+             #                     TRT = as_labeller(c(None_Light = NA, 
+             #                                          Treated_Heavy = NA
+             #                                          ))
+  #)
+             )+
+  #theme_custom()+
+  theme(strip.text = element_text(size = 10), 
+        panel.spacing = unit(1.5,"cm"))
+p2split
+
+#ggsave(plot = p2split , "../output/plots/paper/Fig4_.svg", width = 14, height = 8)
+sum_df$mod_sum[[1]]
 ```
-
-The `echo: false` option disables the printing of code (only output is displayed).

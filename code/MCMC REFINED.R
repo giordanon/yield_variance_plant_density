@@ -251,18 +251,17 @@ modelSum <- function(mod, step, xmax){
       }
       
       # Get summaries for variance
-      var_q500 = mean(est_int[,1])
+      var_q500 = quantile(est_int[,1], probs = 0.50)
       var_q025 = quantile(est_int[,1], probs = 0.025)
       var_q975 = quantile(est_int[,1], probs = 0.975)
       
       # Get summaries for mean
-      m_q500 = mean(est_int[,2])
+      m_q500 = quantile(est_int[,2], probs = 0.50)
       m_q025 = quantile(est_int[,2], probs = 0.025)
       m_q975 = quantile(est_int[,2], probs = 0.975)
       
       # Get summaries for the prediction interval
-      
-      pred_q500 = mean(pred_int)
+      pred_q500 = quantile(pred_int, probs = 0.50)
       pred_q025 = quantile(pred_int, probs = 0.025)
       pred_q975 = quantile(pred_int, probs = 0.975)
       
@@ -288,7 +287,7 @@ getSummaries <- function(mod, groups, step){
   # Parallel processing
   cores = ifelse(nrow(unique(mod[groups]))>16,16,nrow(unique(mod[groups])))
   cluster <- new_cluster(cores)
-  cluster_library(cluster, c("dplyr", "purrr", "tibble"))
+  cluster_library(cluster, c("dplyr", "purrr", "tibble", "tidybayes"))
   cluster_copy(cluster,c("modelSum", "expPlateau", "quadPlateau", "step","groups"))
   
   out <- mod %>% 

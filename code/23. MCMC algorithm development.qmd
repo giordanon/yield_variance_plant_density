@@ -8,7 +8,6 @@ editor: visual
 library(tidyverse)
 ```
 
-
 ```{r}
 data_mh <- readRDS("../data/data_ye2.RData") %>% 
   filter(SOURCE2 == "Kansas" & TRT2 == "Treated" & CLEAN2 == "Heavy" & YE2 == 3.37) %>% 
@@ -60,7 +59,6 @@ exp_plateau <- function(a1, maxVPD,minVPD,x){
 
 ```
 
-
 ```{r}
 # Likelihood function
 likelihood <- function(parameters, 
@@ -88,7 +86,6 @@ likelihood <- function(parameters,
 
 ```
 
-
 ```{r}
 # Priors 
 priors <- function(parameters){
@@ -115,7 +112,6 @@ priors <- function(parameters){
 
 ```
 
-
 ```{r}
 # Likelihood * Prior
 posterior <- function(parameters,x,y){
@@ -124,7 +120,6 @@ posterior <- function(parameters,x,y){
 }
 
 ```
-
 
 ```{r}
 # Proposal values
@@ -210,8 +205,6 @@ length((out[,1]))
 
 ```
 
-
-
 ```{r fig.width= 20 fig.height = 7}
 par(mfrow = c(2,5))
 hist(out[,1],nclass=30, , main="Posterior of b1" )
@@ -228,13 +221,15 @@ plot(out[,5], type = "l",  main = "Chain values of minVPD")
 ```
 
 ```{r}
+readRDS(sum_path)$mod[[1]]
+
 xl <- seq(10,200,2)
 # Get prediction intervals
 df_pred <- 
-as.data.frame(out) %>% 
+as.data.frame(readRDS(sum_path)$mod[[1]]) %>% 
   rowwise() %>% 
-  mutate(sigmaY = list(exp_plateau(a1, maxVPD, minVPD, xl)), 
-         YIELD = list(quad_plateau(b1, AOPD, xl)),
+  mutate(sigmaY = list(expPlateau(a1, maxVPD, minVPD, xl)), 
+         YIELD = list(quadPlateau(b1, AOPD, xl)),
          STAND = list(xl)
          ) %>% 
   rowid_to_column("draw") %>% 
@@ -252,6 +247,11 @@ as.data.frame(out) %>%
             )  
 ```
 
+
+```{r}
+readRDS(sum_path)[,1:3]
+```
+
 ```{r}
 df_pred %>% 
 ggplot()+
@@ -260,7 +260,23 @@ ggplot()+
   geom_line(aes(x = STAND, y = q025))+
   geom_ribbon(aes(x = STAND,ymin = q025, ymax = q975), alpha = 0.3, fill = "red")+
   theme_test()+
-  geom_point(data = data_mh, aes(x = STAND, y = YIELD), shape = 21, fill = "#d5d8de", size = 3, alpha = .5)
+  geom_point(data = readRDS(sum_path)$data[[2]], aes(x = STAND, y = YIELD), shape = 21, fill = "#d5d8de", size = 3, alpha = .5)
+
+df_pred %>% 
+ggplot()+
+  geom_line(aes(x = STAND, y = q050), size = 1)+
+  geom_line(aes(x = STAND, y = q975))+
+  geom_line(aes(x = STAND, y = q025))+
+  geom_ribbon(aes(x = STAND,ymin = q025, ymax = q975), alpha = 0.3, fill = "red")+
+  theme_test()+
+  geom_point(data = readRDS(sum_path)$data[[2]], aes(x = STAND, y = YIELD), shape = 21, fill = "#d5d8de", size = 3, alpha = .5)
+
+readRDS(sum_path)$mod_sum[[2]] %>% 
+ggplot()+
+  geom_line(aes(x = STAND, y = pred_q500), size = 1)+
+  geom_line(aes(x = STAND, y = pred_q975))+
+  geom_line(aes(x = STAND, y = pred_q025))+
+  geom_ribbon(aes(x = STAND,ymin = pred_q025, ymax = pred_q975), alpha = 0.3, fill = "red")+
+  theme_test()
+  #geom_point(data = data_mh, aes(x = STAND, y = YIELD), shape = 21, fill = "#d5d8de", size = 3, alpha = .5)
 ```
-
-

@@ -8,6 +8,7 @@ editor: visual
 source("MCMC REFINED.R")
 library(multidplyr)
 library(tidyverse)
+library(tidybayes)
 ```
 
 Read data
@@ -60,10 +61,36 @@ Extract model summaries
 
 ```{r}
 model <- readRDS("../output/model/model.RData")
-step <-1
+step <- 1
+groups <- c("YE", "TRT", "CLEAN")
 getSummaries(model, groups, step)
 
 ```
+
+
+```{r}
+
+test <- readRDS("../output/model/summaries.RData")[2,]$mod[[1]]
+
+rnormBound <- function(n, mean = 0, sd = 1, lower = -Inf, upper = Inf) {
+  samples <- numeric(n)
+  for (i in seq_len(n)) {
+    repeat {
+      value <- rnorm(1, mean, sd)
+      if (value >= lower && value <= upper) {
+        samples[i] <- value
+        break
+      }
+    }
+  }
+  samples
+}
+
+samples <- rnormBound(1000, mean=0, sd=1, lower=-3, upper=3)
+
+hist(samples)
+```
+
 
 
 
