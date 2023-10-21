@@ -48,8 +48,8 @@ likelihood <- function(parameters,
 
 # This funciton allows to get SD from Canadian data posteriors
 estimateSD <- function(q50, q99) {
-  z99 <- 2.576
   
+  z99 <- 2.576
   # Calculate using the 99th percentile
   sd <- (q99 - q50) / z99
   
@@ -128,6 +128,7 @@ metropolisMCMC <- function(iterations,# number of iterations
     proposal = proposalFunction(chain[i,])
     
     probability = exp(posterior(proposal,x,y) - posterior(chain[i,],x,y))
+    
     if (runif(1) < probability){
       # Accept
       chain[i+1,] = proposal

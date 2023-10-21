@@ -12,7 +12,7 @@ library(tidybayes)
 library(truncnorm)
 ```
 
-Run for canadian data
+# Canadian data
 
 ```{r}
 data <- readRDS("../data/data_ye2.RData") %>% 
@@ -53,52 +53,15 @@ runSplits(data, groups, iterations,
 
 ```{r}
 model <- readRDS("../output/model/model_canada.RData")
+# Trace plots
 tracePlots(model)
+step <- 1
+groups <- c("SOURCE")
+getSummaries(model, groups, step, "summaries_canada")
 
-q99 <- apply(model$mod[[1]], 2, quantile ,probs = .99)
-q50 <- apply(model$mod[[1]], 2, quantile ,probs = .5)
-q01 <- apply(model$mod[[1]], 2, quantile ,probs = .001)
-
-estimateSD <- function(q50, q99) {
-  z99 <- 2.576
-  
-  # Calculate using the 99th percentile
-  sd <- (q99 - q50) / z99
-  
-  return(c(sd))
-}
-
-sd <-  estimateSD(q50, q99)
-
-
-priors <- function(parameters){
-  
-  b1 = parameters[1]
-  AOPD = parameters[2]
-  
-  a1 = parameters[3]
-  maxVPD = parameters[4]
-  minVPD = parameters[5]
-  
-  # Specify priors
-  # b1
-  bprior = log(dtruncnorm(b1,mean = q50["b1"], sd = sd["b1"], a = 0, b = 0.2))
-  #AOPD
-  AOPDprior = log(dtruncnorm(AOPD,mean = q50["AOPD"], sd = sd["AOPD"], a = 10, b = 200 ))
-  # a1
-  aprior = log(dtruncnorm(a1,mean = q50["a1"], sd = sd["a1"],a = 0 , b = q99["a1"]))
-  # minVPD
-  # Upper bound from Canadian data 192
-  minVPDprior = log(dtruncnorm(minVPD,mean = q50["minVPD"], sd = sd["minVPD"],a = 0, b = q99["minVPD"]))
-  # maxVPD
-  # Upper bound from Canadian data 124
-  maxVPDprior = log(dtruncnorm(maxVPD,mean = q50["maxVPD"], sd = sd["maxVPD"],a = 0, b = q99["maxVPD"]))
-  
-  return(bprior+AOPDprior+aprior+minVPDprior+maxVPDprior)
-}
 ```
 
-Run Kansas data
+# Kansas data
 
 Read data
 
@@ -119,7 +82,7 @@ parameterStart <- c("b1" = 0.05,
 
 sigmaTune <- c(0.005,10, 0.005,10,10)
 
-iterations <- 1e6
+iterations <- 100e6
 burnIn <- 0.2
 thinning <- 5
 groups <- c("YE", "TRT", "CLEAN")
@@ -137,11 +100,59 @@ environment <- c(
 )
 ```
 
-
 ```{r}
 runSplits(data, groups, iterations, burnIn, thinning, parameterStart,sigmaTune, environment, filename = "model_kansas")
 ```
 
+Run the model with no thinning to assess autocorrelation between MCMC samples
+
+```{r}
+thinning <- 1000
+runSplits(data, groups, iterations, burnIn, thinning,
+          parameterStart,sigmaTune, environment, filename = "model_kansas_all_samples")
+```
+
+```{r}
+kansas <- readRDS( "../output/model/model_kansas_all_samples.RData")
+
+
+
+acfPlot <- function(mod, lag){
+  
+  for (i in 1:nrow(mod)){
+
+    out <- mod$mod[[i]]
+    
+    title <- paste0(mod$YE[i],"_", mod$TRT[i], "_", mod$CLEAN[i])
+    filename <- paste0("../output/plots/trace/acf_", title, ".png")
+    
+    png(filename, width=800, height=180) 
+    par(mfrow = c(1,5))
+    acf(out[,"b1"], lag.max = lag, main="b1")
+    acf(out[,"AOPD"], lag.max = lag,  main="AOPD")
+    acf(out[,"a1"], lag.max = lag, main="a1")
+    acf(out[,"maxVPD"], lag.max = lag, main="maxVPD")
+    acf(out[,"minVPD"], lag.max = lag, main="minVPD")
+    title(title, outer = TRUE)
+    
+    # Close the PNG device
+    dev.off()
+
+  }
+}
+
+acfPlot(kansas, 60)
+tracePlots(kansas)
+
+model <- readRDS("../output/model/model_canada.RData")
+q99 <- apply(model$mod[[1]], 2, quantile ,probs = .99)
+q50 <- apply(model$mod[[1]], 2, quantile ,probs = .5)
+q01 <- apply(model$mod[[1]], 2, quantile ,probs = .001)
+
+sd <-  estimateSD(q50, q99)
+
+hist(rnorm(1000,160,15*1.5))
+```
 
 ```{r}
 model <- readRDS("../output/model/model_kansas.RData")
@@ -154,9 +165,48 @@ Extract model summaries
 model <- readRDS("../output/model/model_kansas.RData")
 step <- 1
 groups <- c("YE", "TRT", "CLEAN")
-getSummaries(model, groups, step)
+getSummaries(model, groups, step, "summaries")
 
 ```
 
+Conquer Kansas model
 
+First summarise data
+
+```{r}
+data <- readRDS("../data/data_ye2.RData") %>% 
+  rename_all(~str_replace(.,"2","")) %>% 
+  filter(SOURCE == "Kansas") %>% 
+  dplyr::select(STAND, YIELD) %>% 
+  ungroup() %>% 
+  nest()
+```
+
+
+```{r}
+mod <- readRDS("../output/model/model_kansas_50M.RData")
+
+ksAll <- mod %>% 
+  dplyr::select(-data) %>% 
+  mutate(.,
+         mod = map(mod, ~as.data.frame(.)), 
+         # Create a fake groupping column
+         group = "group"
+         ) %>% 
+  unnest(cols = mod) %>% 
+  select(-c(YE:CLEAN)) %>%  
+  group_by(group) %>% 
+  nest(.key = "mod") %>% 
+  # backtransform to a matrix
+  mutate(.,
+         mod = map(mod, ~as.matrix(.)), 
+         ) %>% 
+  cbind(data)
+
+
+step <- 1
+groups <- c("group")
+getSummaries(ksAll, groups, step, "summaries_50M_ksAll")
+
+```
 

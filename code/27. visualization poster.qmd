@@ -176,81 +176,84 @@ pKS
 ggsave(plot = pKS , "../output/plots/figures/Figure 2.png", width = 10, height = 4, dpi=600)
 ```
 
-## Figure 3
+## Poster Figure 2
 
 Process model all splits
 
 ```{r  fig.width=16, fig.height=7}
 min_stand <- 
-data %>% 
-  group_by(SOURCE, YE, TRT, CLEAN) %>% 
-  summarise_at(vars(STAND), ~min(.,na.rm=T)) %>% 
-  rename(minSTAND = STAND)
-  
-  
-sum_df <- 
- readRDS(sum_path) %>% 
-  full_join(min_stand) %>% 
-  mutate(mod_sum = pmap(list(..1 = mod_sum, ..2 = minSTAND), 
-                        ~ ..1 %>% mutate(STAND = ifelse(STAND >= ..2, STAND, NA)) %>% 
-                          drop_na()
-                        ))
-
-
-# Reorder facets
-levels <- c("None_Light-pred5.59" ,
-            "None_Light-var5.59",
-            "Treated_Heavy-pred5.59",
-            "Treated_Heavy-var5.59",
-            "None_Light-pred3.37",
-            "None_Light-var3.37",
-            "Treated_Heavy-pred3.37",
-            "Treated_Heavy-var3.37" 
-             )
-
-points2 <- data %>% 
-  ungroup() %>% 
-  mutate(SOURCE = case_when(TRT == "None"& CLEAN=="Light" ~ SOURCE, 
-                             TRT == "Treated"& CLEAN=="Heavy" ~ SOURCE, 
-                             T~NA_character_
-                             )
-         
-         ) %>% 
-  
-  drop_na(SOURCE) %>% 
-  mutate(var = "var", 
-         pred = "pred") %>% 
-  pivot_longer(cols = c(pred, var), names_to = 'estimate', values_to = "value") %>% 
-  mutate(YIELD = case_when(estimate == "pred"~YIELD, T~NA_real_)) %>% 
-  mutate(TRT = paste0(TRT, "_", CLEAN),
-         # Define variables for facet_wrap
-         FW = paste0(TRT, "-", estimate, YE),
-         # Roerder facets
-         FW = fct_relevel(as.factor(FW),levels =  levels)
-         ) 
-
-
-names <- c(`None_Light-pred5.59` = "Expected~Yield~(Mg~ha^-1)" ,
-           `None_Light-var5.59` ="Yield~Std~Deviation~(Mg~ha^-1)" ,
-           `Treated_Heavy-pred5.59` = "Expected~Yield~(Mg~ha^-1)",
-           `Treated_Heavy-var5.59` = "Yield~Std~Deviation~(Mg~ha^-1)",
-           `None_Light-pred3.37` = "Expected~Yield~(Mg~ha^-1)",
-           `None_Light-var3.37` = "Yield~Std~Deviation~(Mg~ha^-1)" ,
-           `Treated_Heavy-pred3.37` = "Expected~Yield~(Mg~ha^-1)",
-           `Treated_Heavy-var3.37` = "Yield~Std~Deviation~(Mg~ha^-1)" 
+  data %>% 
+    group_by(SOURCE, YE, TRT, CLEAN) %>% 
+    summarise_at(vars(STAND), ~min(.,na.rm=T)) %>% 
+    rename(minSTAND = STAND) %>% 
+    filter(YE == 3.37 & TRT == "None" & CLEAN == "Light")
+    
+    
+  sum_df <- 
+   readRDS(sum_path) %>% 
+    full_join(min_stand) %>% 
+    mutate(mod_sum = pmap(list(..1 = mod_sum, ..2 = minSTAND), 
+                          ~ ..1 %>% mutate(STAND = ifelse(STAND >= ..2, STAND, NA)) %>% 
+                            drop_na()
+                          ))%>% 
+    filter(YE == 3.37 & TRT == "None" & CLEAN == "Light")
+ 
+ 
+ # Reorder facets
+ levels <- c("None_Light-pred5.59" ,
+              "None_Light-var5.59",
+              "Treated_Heavy-pred5.59",
+              "Treated_Heavy-var5.59",
+              "None_Light-pred3.37",
+              "None_Light-var3.37",
+              "Treated_Heavy-pred3.37",
+              "Treated_Heavy-var3.37" 
+               )
+ 
+ points2 <- data %>% 
+    filter(YE == 3.37 & TRT == "None" & CLEAN == "Light") %>% 
+    ungroup() %>% 
+    mutate(SOURCE = case_when(TRT == "None"& CLEAN=="Light" ~ SOURCE, 
+                               TRT == "Treated"& CLEAN=="Heavy" ~ SOURCE, 
+                               T~NA_character_
+                               )
+           
+           ) %>% 
+    
+    drop_na(SOURCE) %>% 
+    mutate(var = "var", 
+           pred = "pred") %>% 
+    pivot_longer(cols = c(pred, var), names_to = 'estimate', values_to = "value") %>% 
+    mutate(YIELD = case_when(estimate == "pred"~YIELD, T~NA_real_)) %>% 
+    mutate(TRT = paste0(TRT, "_", CLEAN),
+           # Define variables for facet_wrap
+           FW = paste0(TRT, "-", estimate, YE),
+           # Roerder facets
+           FW = fct_relevel(as.factor(FW),levels =  levels)
            )
 
-
-label <- unique(points2[,c(1,2,4,5,8)]) %>% 
-  ungroup() %>% 
-  mutate(label = c("G", "H", "E", "F", "A", "B", "C", "D"), 
-         # Define variables for facet_wrap
-         FW = paste0(TRT, "-", estimate, YE),
-         # Roerder facets
-         FW = fct_relevel(as.factor(FW),levels =  levels)
-         ) %>% 
-  arrange(FW)
-
+ 
+ names <- c(`None_Light-pred5.59` = "Expected~Yield~(Mg~ha^-1)" ,
+             `None_Light-var5.59` ="Yield~Std~Deviation~(Mg~ha^-1)" ,
+             `Treated_Heavy-pred5.59` = "Expected~Yield~(Mg~ha^-1)",
+             `Treated_Heavy-var5.59` = "Yield~Std~Deviation~(Mg~ha^-1)",
+             `None_Light-pred3.37` = "Expected~Yield~(Mg~ha^-1)",
+             `None_Light-var3.37` = "Yield~Std~Deviation~(Mg~ha^-1)" ,
+             `Treated_Heavy-pred3.37` = "Expected~Yield~(Mg~ha^-1)",
+             `Treated_Heavy-var3.37` = "Yield~Std~Deviation~(Mg~ha^-1)" 
+             )
+ 
+ 
+ label <- unique(points2[,c(1,2,4,5,8)]) %>% 
+    ungroup() %>% 
+    mutate(label = c("A", "B"), 
+           # Define variables for facet_wrap
+           FW = paste0(TRT, "-", estimate, YE),
+           # Roerder facets
+           FW = fct_relevel(as.factor(FW),levels =  levels)
+           ) %>% 
+    arrange(FW)%>% 
+    filter(YE == 3.37 & TRT == "None" & CLEAN == "Light")
 
   
 
@@ -301,38 +304,42 @@ ggplot()+
            aes(x = STAND, y = YIELD),
           shape = 21,
          fill = "black",
-        size = 3, alpha = 0.1
+        size = 5, alpha = 0.2
        )+
   # Expected value and credible interval for the variance model
-  geom_line(aes(x = STAND, y = q500, group = estimate), color = "black", linewidth = 1)+
+  geom_line(aes(x = STAND, y = q500, group = estimate), color = "black", linewidth = 1.3)+
   geom_line(aes(x = STAND, y = q975, color = estimate))+
   geom_line(aes(x = STAND, y = q025, color = estimate))+
   geom_ribbon(aes(x = STAND,ymin = q025, ymax = q975, fill = estimate), alpha = 0.2)+
   
   geom_text(data = label, 
             aes(label = label),
-                 fontface = "bold", size=6,
+                 fontface = "bold", size=10,
                  x = -Inf, y= Inf, vjust = 1.2, hjust =-0.25)+
   
   scale_fill_manual(values = c(violeta, naranja))+
   scale_color_manual(values = c(violeta, naranja))+
+  scale_x_continuous(limits = c(0,202))+
   guides(color = "none", fill="none")+
   labs(y = "", x = expression(paste("Plant Density (",plants~m^-2,")")))+
   facet_wrap(~FW, 
-             ncol=4,
+             ncol=1,
              scales = "free_y",
              strip.position = "left",
              labeller = labeller(FW = as_labeller(names, label_parsed))
              )+
   theme_custom()+
-  theme(strip.text = element_text(size = 15), 
-        panel.spacing = unit(1,"cm"), 
-        strip.placement = "outside")
+  theme(
+        strip.text = element_text(size = 28), 
+        axis.text = element_text(size = 15), 
+        axis.title.x = element_text(size = 28), 
+        #panel.spacing = unit(1,"cm"), 
+        strip.placement = "outside"
+        )
 
+p2split
 
-
-
-
+#ggsave(plot = p2split , "../output/plots/figures/Poster Figure 2.png", width = 7.35, height = 11.9,units = "in", dpi=600)
 ```
 
 GGarrange
@@ -417,7 +424,7 @@ round(q01,2)
 round(q99,2)
 ```
 
-## Figure 4
+## Poster Figure 3
 
 Yield differences between treatments
 
@@ -434,6 +441,7 @@ readRDS(sum_path) %>%
 
 comp2<-
 comp[, c("YE", "TRT", "CLEAN", "mod")] %>% 
+  #filter(YE == 3.37 & TRT == "None" & CLEAN == "Light") %>% 
   pivot_wider(names_from = c(TRT, CLEAN), values_from = mod) %>% 
   pivot_longer(cols = -c(None_Light, YE), values_to = "VAL", names_to = "Treatment") %>% 
   mutate(.,
@@ -449,10 +457,11 @@ comp[, c("YE", "TRT", "CLEAN", "mod")] %>%
                        }
                  )
          ) %>% 
-  filter(Treatment == "Treated_Heavy")
+  filter(Treatment == "Treated_Heavy" & YE == 3.37)
 
 
 label <- comp2[,c("YE","Treatment", "p")] %>% 
+  filter(Treatment == "Treated_Heavy" & YE == 3.37) %>% 
   unnest(cols = c(p)) %>% 
    pivot_longer(cols = c(var, mean)) %>% 
    mutate(Treatment = fct_relevel(as.factor(Treatment), trt_levels),
@@ -499,7 +508,7 @@ labelSP <-
   ungroup() %>% 
   dplyr::select(YE) %>% 
   unique() %>% 
-  mutate(label = c("A", "B"))
+  mutate(label = c("A"))
 ```
 
 Plot figure 4
@@ -519,14 +528,14 @@ comp2_sum %>%
                      y=stringr::str_wrap(name, 9),
                      color = name, 
                      group = name), 
-                 linewidth = 1.6, 
+                 linewidth = 1.9, 
                  lineend = "round",
                  alpha=0.8)+
   geom_point(data = points,
              aes(y = stringr::str_wrap(name, 9),
                  x = q500, fill = name),
              shape = 21, 
-             size=3, 
+             size=5, 
              stroke = 1.5)+
   geom_vline(xintercept = 0, 
              linetype = "dashed")+
@@ -535,28 +544,35 @@ comp2_sum %>%
                 y = stringr::str_wrap(name, 9), 
                 color = name),
             fontface = "bold",
-            size=3.5,
+            size=7,
             x= Inf, 
             vjust = 1.2,
             hjust = 0.5)+
     geom_text(data = labelSP,
             aes(label = label),
-                 fontface = "bold",size=6,
+                 fontface = "bold",size=10,
                  x = Inf, y= -Inf, vjust = 1.2, hjust =-0.25)+
   coord_flip()+
-  facet_wrap(~YE)+
+  #facet_wrap(~YE)+
   scale_fill_manual(values = c(violeta, naranja))+
   scale_color_manual(values = c(violeta, naranja))+
   guides(fill = "none", color = "none")+
   labs(y = "", x = expression(Delta~paste("Yield (",Mg~ha^-1,")")))+
   theme_custom()+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
-        axis.title = element_text(size=10)
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 20),
+        #axis.title = element_text(size=10), 
+        
+        axis.text.y = element_text(size = 20), 
+        axis.title.y = element_text(size = 28), 
+        #panel.spacing = unit(1,"cm"), 
+        #strip.placement = "outside", 
+        strip.text = element_blank()
   )
 p4
-ggsave(plot = p4 , "../output/plots/figures/Figure 4.png", width = 8, height = 5, dpi=600)
+#ggsave(plot = p4 , "../output/plots/figures/Poster Figure 3.png", width = 8, height = 5, dpi=600)
 
-
+ggsave(plot = p4 , "../output/plots/figures/Poster Figure 3.png", width = 6,
+       height = 7,units = "in", dpi=600)
 ```
 
 ## Figure 5C, 5D
