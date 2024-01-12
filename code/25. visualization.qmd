@@ -752,3 +752,12 @@ p6
 
 ggsave(plot = p6 , "../output/plots/figures/Figure 6.png", width = 8, height = 5, dpi=600)
 ```
+
+
+```{r}
+quantile(sum_df[,c("mod")][[1]][[1]][,2], probs = .99)
+quantile(sum_df[,c("mod")][[1]][[1]][,2], probs = .01)
+
+sum(ifelse(sum_df[,c("mod")][[1]][[1]][,5] - sum_df[,c("mod")][[1]][[1]][,2]>0,0,1))/ length(sum_df[,c("mod")][[1]][[1]][,5])
+```
+

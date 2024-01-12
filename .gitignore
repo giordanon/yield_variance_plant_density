@@ -1,5 +1,6 @@
 # Ignore everything
 *
+output/plots/*
 
 # But not these files...
 !.gitignore
