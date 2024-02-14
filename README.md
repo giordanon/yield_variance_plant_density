@@ -1,4 +1,4 @@
-# ST-PROJECT
+# A Bayesian framework to model variance of grain yield response to plant density
  
 This repository contains the codes and algorithms developed for the article "A Bayesian framework to model variance of grain yield response to plant density"  to be published in Plant Methods.
 
