@@ -36,9 +36,7 @@ trt_levels <- c("Treated_Heavy","Treated_Moderate", "Treated_Light", "None_Heavy
 
 ```
 
-# Main body
-
-## Figure Kansas overall
+# Wrangling
 
 ```{r fig.width = 10, fig.height=5}
 sum_df <- readRDS("../output/model/summaries_50M_ksAll.RData") 
@@ -317,7 +315,7 @@ comp2_sum %>%
                                         x = stringr::str_wrap(YE, 9)),
                                     color = ..4,
                                     fontface = "bold",
-                                    size = 3.5,
+                                    size = 4,
                                     y = Inf, 
                                     vjust = 1.2,
                                     hjust = 0.5)+
@@ -357,7 +355,7 @@ comp2_sum %>%
                                         x = stringr::str_wrap(YE, 9)),
                                     color = ..4,
                                     fontface = "bold",
-                                    size=3.5,
+                                    size=4,
                                     y = Inf, 
                                     vjust = 1.2,
                                     hjust = 0.5)+
@@ -385,11 +383,13 @@ ps3data %>%
                                  fontface = "bold",size=6,
                                  x = -Inf, y= Inf, vjust = 1.2, hjust = -0.25)
                        ))
+```
 
 
-ps3 <- ggarrange(plotlist = ps3data$plot,  ncol = 2, nrow = 5)
-
-ggsave(plot = ps3 , "../output/plots/supplementary/Figure 3s.png", width = 10, height = 25, dpi=600)
+```{r fig.width= 17, fig.height=10}
+ps3 <- ggarrange(plotlist = ps3data$plot,  ncol = 4, nrow = 3)
+ps3
+ggsave(plot = ps3 , "../output/plots/supplementary/Figure 3s.png", width = 17, height = 10, dpi=600)
 
 ```
 
