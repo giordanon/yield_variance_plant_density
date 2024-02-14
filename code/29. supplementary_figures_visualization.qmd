@@ -1,0 +1,607 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## Set up environment, functions and local variables
+
+```{r setup, message = F}
+library(tidyverse)
+library(tidybayes)
+library(patchwork)
+library(cowplot)
+library(extrafont)
+library(ggpubr)
+
+source("functions.R")
+source("MCMC REFINED.R")
+
+
+data <- readRDS("../data/data_ye2.RData") %>% 
+  rename_all(~str_replace(.,"2","")) %>% 
+  filter(SOURCE == "Kansas") %>% 
+  mutate(.,
+         # Rename yielding environments
+         YE = case_when(YE == 3.37 ~ "Low", 
+                        YE == 5.59 ~ "High")
+         )
+# Local variables
+sum_path<- paste0("../output/model/summaries_50M.RData")
+violeta <- '#75338a'
+naranja <- '#de870d'
+mix <- "#aa5d4c"
+trt_levels <- c("Treated_Heavy","Treated_Moderate", "Treated_Light", "None_Heavy","None_Moderate")
+
+
+```
+
+# Main body
+
+## Figure Kansas overall
+
+```{r fig.width = 10, fig.height=5}
+sum_df <- readRDS("../output/model/summaries_50M_ksAll.RData") 
+
+
+points <- data %>% 
+  mutate(.,
+         m = "m",
+         var = "var", 
+         pred = "pred" 
+         ) %>% 
+  pivot_longer(cols = c(m, var, pred), names_to = 'estimate', values_to = "value") %>% 
+  mutate(YIELD = case_when(estimate %in% c("pred") ~YIELD, T~NA_real_), 
+         estimate = fct_relevel(as.factor(estimate), c("m", "var", "pred")
+                                )
+         )
+
+estimate_names <- c(m = "mu[ij]~(Mg~ha^-1)",
+                    var = "sigma[ij]~(Mg~ha^-1)",
+                    pred = "y[ij]~(Mg~ha^-1)"
+                    ) 
+```
+
+# Figure 2
+
+Show all splits
+
+```{r fig.width = 15, fig.height=5}
+min_stand <-
+data %>%
+  group_by(SOURCE, YE, TRT, CLEAN) %>%
+  summarise_at(vars(STAND), ~min(.,na.rm=T)) %>%
+  rename(minSTAND = STAND) 
+
+pointSubset <- points 
+  
+sum_df <- 
+ readRDS(sum_path) %>% 
+  mutate(.,
+         # Rename yielding environments
+         YE = case_when(YE == 3.37 ~ "Low", 
+                        YE == 5.59 ~ "High")
+         ) %>% 
+  full_join(min_stand) %>% 
+  mutate(mod_sum = pmap(list(..1 = mod_sum, ..2 = minSTAND), 
+                        ~ ..1 %>% mutate(STAND = ifelse(STAND >= ..2, STAND, NA)) %>% 
+                          drop_na()
+                        )) 
+
+ps2data <- 
+sum_df[,c("YE","TRT","CLEAN","mod_sum")] %>% 
+  unnest() %>% 
+  mutate(pred_q025r = ifelse(pred_q025<=0,0,pred_q025), 
+         pred_q025 = ifelse(pred_q025<=0,NA,pred_q025)
+         ) %>% 
+  mutate_at(vars(var_q500, var_q025,var_q975), ~sqrt(.)) %>% 
+  dplyr::select(-pred_q025) %>% 
+  rename(pred_q025= pred_q025r) %>% 
+  pivot_longer(cols = c(pred_q500:pred_q025), 
+               names_sep = "_", 
+               names_to = c("estimate", ".value")
+               
+               ) %>% 
+  mutate(.,
+         max_height = case_when(estimate %in% c("pred","m")~8.5, 
+                                estimate == "var"~1.3,
+                                ),
+         min_height = case_when(estimate %in% c("pred","m")~0, 
+                                estimate == "var"~0
+                                )
+         ) %>% 
+  mutate(estimate = fct_relevel(as.factor(estimate), c("m", "var", "pred")
+                                )
+         )
+
+
+
+labelOut <- list()
+
+for (letter in LETTERS[seq( from = 1, to = 12 )]){
+  label1 <- paste0(letter,".1")
+  label2 <- paste0(letter,".2")
+  label3 <- paste0(letter,".3")
+  label <- c(label1, label2, label3)
+  labelOut <- rbind(labelOut,label)
+}
+
+label <- 
+cbind(as.data.frame(labelOut) %>% 
+        rename_all(~c("m", "var", "pred")) %>% 
+        unnest(), 
+      unique(sum_df[,c("YE","TRT","CLEAN")])) %>% 
+  pivot_longer(cols = c("m", "var", "pred"), 
+               names_to = "estimate", values_to = "label") %>% 
+  mutate(estimate = fct_relevel(as.factor(estimate), c("m", "var", "pred")))
+
+
+
+
+```
+
+```{r fig.width = 15, fig.height=5}
+
+ps2 <- 
+ps2data %>% 
+  group_by(YE, TRT, CLEAN) %>% 
+  nest() %>% 
+  mutate(.,
+         plot = pmap(list(..1 = YE,..2 = TRT,..3 = CLEAN,..4 = data),
+                     ~..4 %>% 
+                     ggplot()+
+                        geom_blank(aes(y = max_height)) +
+                        geom_blank(aes(y = min_height)) +
+                        
+                        geom_point(data = pointSubset %>% 
+                                     filter(YE == ..1 & TRT == ..2 & CLEAN == ..3),
+                                 aes(x = STAND, y = YIELD),
+                                shape = 21,
+                               fill = "black",
+                              size = 3, alpha = 0.1
+                             )+
+                        # Expected value and credible interval for the variance model
+                        geom_line(aes(x = STAND, y = q500, group = estimate), color = "black", linewidth = 1)+
+                        geom_line(aes(x = STAND, y = q975, color = estimate))+
+                        geom_line(aes(x = STAND, y = q025, color = estimate))+
+                        geom_ribbon(aes(x = STAND, ymin = q025, ymax = q975, fill = estimate), alpha = 0.2)+
+                        
+                        geom_text(data = label %>% 
+                                    filter(YE == ..1 & TRT == ..2 & CLEAN == ..3),
+                                  aes(label = label),
+                                       fontface = "bold", size=10,
+                                       x = -Inf, y= Inf, vjust = 1.2, hjust =-0.25)+
+                        
+                        scale_fill_manual(values = c(violeta, naranja, mix))+
+                        scale_color_manual(values = c(violeta, naranja, mix))+
+                       scale_x_continuous(limits = c(0,250), breaks = c(seq(0,250,50)))+
+                      
+                        guides(color = "none", fill="none")+
+                        labs(y = "", x = expression(paste(italic(s[ij])," (",plants~m^-2,")")), 
+                             title = paste0("Yield Environment: ",..1,
+                                            "; Seed Treatment: ", ..2, 
+                                            "; Seed Size: ", ..3
+                                            ))+
+                        facet_wrap(~estimate, 
+                                   ncol = 3,
+                                   scales = "free", 
+                                   strip.position = "left",
+                                   labeller = labeller(estimate = as_labeller(estimate_names, label_parsed))
+                                   )+
+                        theme_custom()+
+                        theme(strip.text = element_text(size = 25), 
+                              axis.title.x = element_text(size = 25),
+                              axis.text = element_text(size = 15),
+                              plot.title = element_text(size = 30)
+                              )
+                     
+                     
+                     
+                     )
+         )
+
+
+
+
+
+  
+```
+
+```{r fig.width = 30, fig.height= 30 warning = FALSE }
+ps2arr <- ggarrange(plotlist = ps2$plot, ncol = 2, nrow = 6)
+
+ggsave(plot = ps2arr ,filename =  "../output/plots/supplementary/Figure 2s.png", width = 30, height = 30, dpi=600, limitsize = FALSE)
+```
+
+## Figure 3
+
+```{r}
+comp <- 
+readRDS(sum_path) %>% 
+  mutate(.,
+         mod  = map(mod,
+                        ~mod_predict(.x))
+         )
+
+comp2<-
+comp[, c("YE", "TRT", "CLEAN", "mod")] %>% 
+  pivot_wider(names_from = c(TRT, CLEAN), values_from = mod) %>% 
+  pivot_longer(cols = -c(None_Light, YE), values_to = "VAL", names_to = "Treatment") %>% 
+  mutate(.,
+         pred = pmap(list(..1 = None_Light, ..2 = VAL), 
+                        ~as.data.frame(..2 - ..1)
+                        ), 
+         
+         p = map(pred, 
+                       function(pred){
+                        psd  <- sum(ifelse(pred[,"sd"] > 0,1,0))/nrow(pred)
+                        pmean <-  sum(ifelse(pred[,"mean"] > 0,1,0))/nrow(pred)
+                        return(as.data.frame(cbind(mean = pmean,var = psd)))
+                       }
+                 )
+         ) 
+
+
+label <- comp2[,c("YE","Treatment", "p")] %>% 
+  unnest(cols = c(p)) %>% 
+  rename(sd = var) %>% 
+  pivot_longer(cols = c(mean,sd)) %>% 
+  mutate(.,
+         #Treatment = fct_relevel(as.factor(Treatment), trt_levels),
+         # Rename yielding environments
+         YE = case_when(YE == 3.37 ~ "Low", 
+                        YE == 5.59 ~ "High")
+          )
+
+
+# Free unuused memory
+rm(comp)
+gc()
+
+comp2_sum <-
+comp2[, c("YE","Treatment", "pred")] %>% 
+  #mutate(Treatment = fct_relevel(as.factor(Treatment), trt_levels)) %>% 
+  unnest(cols = c(pred)) %>% 
+  #Transform variance to SD
+  pivot_longer(cols = c(mean,sd)) %>% 
+  mutate(.,
+         # Rename yielding environments
+         YE = case_when(YE == 3.37 ~ "Low", 
+                        YE == 5.59 ~ "High")
+         )
+
+points<- 
+comp2_sum %>% 
+  group_by(YE,Treatment, name) %>% 
+  summarise_at(vars(value), list(q500 = ~round(median(.),1), 
+                                 q975  = ~round(quantile(., probs = 0.975),1), 
+                                 q025  = ~round(quantile(., probs = 0.025),1) 
+                                 )
+               )
+
+```
+
+```{r}
+ps3data <- 
+comp2_sum %>% 
+  group_by(Treatment, name) %>% 
+  nest() %>% 
+  cbind(color = rep(c('#75338a','#de870d'),5), 
+        label2 = LETTERS[seq( from = 1, to = 10 )]
+        ) %>% 
+  mutate(.,
+         plot = ifelse(name == "mean",
+           pmap(list(..1 = Treatment, ..2 = name, ..3 = data, ..4 = color),
+                     ~..3 %>% ggplot()+
+                          stat_halfeye(aes(y=value, x=YE),fill = ..4, .width = 0, alpha = 0.4, height = 0.4,
+                                        size = 0.7, point_alpha = 0)+
+                          geom_linerange(data = points %>% filter(name == ..2 & Treatment == ..1),
+                                         aes(ymin = q025,
+                                             ymax = q975, 
+                                             x=stringr::str_wrap(YE, 9),
+                                             group = name), 
+                                         linewidth = 1.6, 
+                                         color = ..4,
+                                         lineend = "round",
+                                         alpha=0.8)+
+                          geom_point(data = points %>% filter(name == ..2 & Treatment == ..1),
+                                     aes(x = stringr::str_wrap(YE, 9),
+                                         y = q500, shape = YE),
+                                     fill = ..4,
+                                     size=3, 
+                                     stroke = 1.5)+
+                          geom_hline(yintercept = 0, 
+                                     linetype = "dashed")+
+                          geom_text(data = label %>% filter(name == ..2 & Treatment == ..1),
+                                    aes(label = paste0(" p (y > 0) = ", round(value, 3)),
+                                        x = stringr::str_wrap(YE, 9)),
+                                    color = ..4,
+                                    fontface = "bold",
+                                    size = 3.5,
+                                    y = Inf, 
+                                    vjust = 1.2,
+                                    hjust = 0.5)+
+                          guides(fill = "none", color = "none", shape = "none")+
+                          scale_shape_manual(values = c(21, 23))+
+                          labs(x = "", y = expression(Delta~paste(mu[j]," (",Mg~ha^-1,")")),
+                               title = paste0("Seed Treatment_Size: ", ..1)
+                               )+
+                          theme_custom()+
+                          theme(
+                                axis.title = element_text(size=10)
+                                )
+                ),
+           pmap(list(..1 = Treatment, ..2 = name, ..3 = data, ..4 = color),
+                     ~..3 %>% ggplot()+
+                          stat_halfeye(aes(y=value, x=YE),fill = ..4, .width = 0, alpha = 0.4, height = 0.4,
+                                        size = 0.7, point_alpha = 0)+
+                          geom_linerange(data = points %>% filter(name == ..2 & Treatment == ..1),
+                                         aes(ymin = q025,
+                                             ymax = q975, 
+                                             x=stringr::str_wrap(YE, 9),
+                                             group = name), 
+                                         linewidth = 1.6, 
+                                         color = ..4,
+                                         lineend = "round",
+                                         alpha=0.8)+
+                          geom_point(data = points %>% filter(name == ..2 & Treatment == ..1),
+                                     aes(x = stringr::str_wrap(YE, 9),
+                                         y = q500, shape = YE),
+                                     fill = ..4,
+                                     size=3, 
+                                     stroke = 1.5)+
+                          geom_hline(yintercept = 0, 
+                                     linetype = "dashed")+
+                          geom_text(data = label %>% filter(name == ..2 & Treatment == ..1),
+                                    aes(label = paste0(" p (y > 0) = ", round(value, 3)),
+                                        x = stringr::str_wrap(YE, 9)),
+                                    color = ..4,
+                                    fontface = "bold",
+                                    size=3.5,
+                                    y = Inf, 
+                                    vjust = 1.2,
+                                    hjust = 0.5)+
+                          guides(fill = "none", color = "none", shape = "none")+
+                          scale_shape_manual(values = c(21, 23))+
+                          labs(x = "", y = expression(Delta~paste(sigma[j]," (",Mg~ha^-1,")")),
+                               title = paste0("Seed Treatment_Size: ", ..1)
+                               )+
+                          theme_custom()+
+                          theme(
+                                axis.title = element_text(size=10)
+                                )
+                )
+           
+         )
+                     )
+
+
+
+ps3data <- 
+ps3data %>%
+  mutate(plot = pmap(list(..1 = label2, ..2 = plot), 
+                     ~..2 + 
+                       geom_text(aes(label = ..1),
+                                 fontface = "bold",size=6,
+                                 x = -Inf, y= Inf, vjust = 1.2, hjust = -0.25)
+                       ))
+
+
+ps3 <- ggarrange(plotlist = ps3data$plot,  ncol = 2, nrow = 5)
+
+ggsave(plot = ps3 , "../output/plots/supplementary/Figure 3s.png", width = 10, height = 25, dpi=600)
+
+```
+
+## Figure 4
+
+```{r}
+comp4 <- 
+readRDS(sum_path)[,c("YE","TRT", "CLEAN", "mod")] %>% 
+  ungroup() %>% 
+  mutate(.,
+         Treatment = paste0(TRT, "_", CLEAN), 
+         mod = map(mod, ~as.data.frame(.x[,c("minVPD", "AOPD")])),
+         ) %>% 
+  dplyr::select(-c(TRT, CLEAN)) %>% 
+  unnest(c(mod)) %>% 
+  mutate(.,
+         # Rename yielding environments
+         YE = case_when(YE == 3.37 ~ "Low", 
+                        YE == 5.59 ~ "High")
+         ) %>% 
+  rename(minRPD = minVPD)
+          
+
+points4<- 
+comp4 %>% 
+  pivot_longer(c(minRPD, AOPD)) %>% 
+  group_by(YE,Treatment, name) %>% 
+  summarise_at(vars(value), list(q500 = ~round(median(.),1), 
+                                 q975  = ~round(quantile(., probs = 0.975),1), 
+                                 q025  = ~round(quantile(., probs = 0.025),1) 
+                                 )
+               )
+
+labelSP <- data.frame(name = c("AOPD", "minRPD"), 
+                      label = c("A", "B"))
+  
+```
+
+```{r}
+
+strip_text <- c(minRPD = "minRPD[~j]", AOPD = "AOPD[~j]")
+p6 <- 
+comp4 %>% 
+  pivot_longer(c(minRPD, AOPD)) %>% 
+  ggplot()+
+  facet_wrap(~name, strip.position = "left", 
+             labeller = labeller(name = as_labeller(strip_text, label_parsed)))+
+  stat_halfeye(aes(y=value, x=Treatment, fill= name, group = YE),scale = 0.7,
+               .width = 0, position = position_dodge(0.7),alpha = 0.4, height = 0.25, 
+                  size = 0.7, point_alpha = 0)+
+  #coord_flip()+
+  geom_linerange(data = points4, 
+                 aes(ymin = q025, ymax = q975, x=Treatment, color = name, group = name), 
+                 linewidth = 1.6, 
+                 lineend = "round",
+                 alpha=0.8,
+                 position = position_dodge2(.7))+
+  geom_point(data = points4,
+             aes(x = Treatment, y = q500, fill = name, shape = YE), 
+              size=3, stroke = 1.5,position = position_dodge2(.7))+
+  geom_text(data = labelSP,
+            aes(label = label),
+                 fontface = "bold", size=6,
+                 x = -Inf, y= Inf, vjust = 1.2, hjust =-0.25)+
+  
+  guides(fill = "none", color = "none", shape = guide_legend(title = "Yield Environment"))+
+  scale_shape_manual(values = c(21, 23))+
+  scale_fill_manual(values = c(violeta, naranja))+
+  scale_color_manual(values = c(violeta, naranja))+
+  scale_y_continuous(breaks = seq(0,200,50), limits = c(50,200))+
+  labs(y = "",x="")+
+  theme_custom()+
+  theme(legend.position = "top",
+        legend.background = element_blank(),
+        legend.key=element_blank(),
+        axis.text.x = element_text(angle = 90),
+    
+        strip.text.y = element_text(size = 15), 
+        
+        strip.background = element_rect(fill= NA))
+
+p6 
+
+ggsave(plot = p6 , "../output/plots/supplementary/Figure 4s.png", width = 10, height = 7, dpi=600)
+```
+
+## Figure 5
+
+```{r}
+comp3 <-
+  readRDS(sum_path)[,c("YE","TRT", "CLEAN", "mod")] %>% 
+  
+  
+  pivot_wider(names_from = c(TRT, CLEAN), values_from = mod) %>% 
+  pivot_longer(cols = -c(None_Light, YE), values_to = "VAL", names_to = "Treatment") %>% 
+  mutate(., 
+         posterior = pmap(list(..1 = None_Light, ..2 = VAL), 
+                        ~as.data.frame(..2 - ..1)
+                        ), 
+         p = map(posterior, 
+                       function(posterior){
+                        p <-  apply(posterior , MARGIN = 2, FUN = function(param){
+                          sum(ifelse(param > 0,1,0))/nrow(posterior)
+                          })
+                        
+                        return(data.frame(a1 = p["a1"], maxVPD = p["maxVPD"], minVPD = p["minVPD"], b1 = p["b1"], AOPD = p["AOPD"]))
+                        }
+                 )
+         ) %>% 
+  rename(treated = "VAL") %>% 
+  mutate(.,
+         # Rename yielding environments
+         YE = case_when(YE == 3.37 ~ "Low", 
+                        YE == 5.59 ~ "High")
+         
+         )
+
+
+
+label <- comp3[,c("YE","Treatment", "p")] %>% 
+  unnest(cols = c(p)) %>% 
+   pivot_longer(cols = c(a1:AOPD)) %>% 
+   filter(name %in% c("minVPD", "AOPD")) %>% 
+   mutate(
+          name = ifelse(name == "minVPD", "minRPD", name)
+          )
+
+comp3_sum<-
+comp3[,c("YE","Treatment","posterior")] %>% 
+  unnest(cols = c(posterior)) %>% 
+  # Filter parameters of interest
+  pivot_longer(cols = c(b1:minVPD)) %>%
+  filter(name %in% c("minVPD", "AOPD")) %>% 
+  mutate(
+          name = ifelse(name == "minVPD", "minRPD", name)
+          #label = case_when(name == "minRPD"~"D", T~"C")
+          )
+
+points3<- 
+comp3_sum %>% 
+  group_by(YE,Treatment, name) %>% 
+  summarise_at(vars(value), list(q500 = ~round(median(.),1), 
+                                 q975  = ~round(quantile(., probs = 0.975),1), 
+                                 q025  = ~round(quantile(., probs = 0.025),1) 
+                                 )
+               )
+labelSP <- 
+  points3 %>% 
+  ungroup() %>% 
+  dplyr::select(name, Treatment) %>% 
+  unique() %>% 
+  mutate(label = c("A1", "A2", "B1","B2","C1","C2", "D1", "D2", "E1", "E2"))
+
+```
+
+```{r}
+strip_text <- c(minRPD = "Delta~minRPD[~j]", AOPD = "Delta~AOPD[~j]")
+
+ps5<-
+comp3_sum %>% 
+  group_by(Treatment) %>% 
+  nest() %>% 
+  mutate(plot = pmap(list(..1 = Treatment, ..2 = data), 
+                     ~..2 %>% 
+                       ggplot()+
+                        geom_hline(yintercept = 0, linetype = "dashed")+
+                        stat_halfeye(aes(y=value, x=YE, fill = name), .width = 0, alpha = 0.4, height = 0.4,
+                                        size = 0.7, point_alpha = 0)+
+                        #coord_flip()+
+                        geom_linerange(data = points3 %>% filter(Treatment == ..1),
+                                       aes(ymin = q025, ymax = q975, x=YE, color = name, group = name),
+                                       linewidth = 1.6, 
+                                       lineend = "round",
+                                       alpha=0.8)+
+                        geom_point(data = points3 %>% filter(Treatment == ..1),
+                                   aes(x = YE, y = q500, fill = name, shape = YE), size=3, stroke = 1.5)+
+                        
+                      
+                        geom_text(data = label %>% filter(Treatment == ..1),
+                                  aes(label = paste0(" p (y > 0) = ", round(value, 3)),x=YE, color = name),
+                                       fontface = "bold",size=3.5,
+                                       y= Inf, vjust = 1.2, hjust = 0.2)+
+                        geom_text(data = labelSP %>% filter(Treatment == ..1),
+                                  aes(label = label),
+                                       fontface = "bold",size=6,
+                                       x = -Inf, y= Inf, vjust = 1.2, hjust =-0.25)+
+                        
+                        facet_wrap(~name, strip.position = "left",scales = "free",
+                                   labeller = labeller(name = as_labeller(strip_text, label_parsed)))+
+                        
+                        scale_fill_manual(values = c(violeta, naranja))+
+                        scale_color_manual(values = c(violeta, naranja))+
+                        scale_y_continuous(breaks = seq(-60,160,20), limits = c(-60,60))+
+                        scale_shape_manual(values = c(21, 23))+
+                        guides(fill = "none", color = "none", shape = "none")+
+                        labs(x="",y = "",title = paste0("Seed Treatment_Size: ", ..1))+
+                        theme_custom()+
+                        theme(legend.position = "top")+
+                        theme(#strip.text.x = element_blank(), 
+                              strip.text = element_text(size=15), 
+                              #axis.title = element_text(size=10),
+                              panel.spacing = unit(0.6, "cm"),
+                              strip.background =element_rect(fill= NA))
+                                             
+                                           ))
+
+ps5 <- ggarrange(plotlist = ps5$plot,  ncol = 1, nrow = 5)
+
+ggsave(plot = ps5 , "../output/plots/supplementary/Figure 5s.png", width = 8, height = 20, dpi=600)
+```
+
+```{r}
+
+
+```

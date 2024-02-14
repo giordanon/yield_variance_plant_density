@@ -10,3 +10,5 @@ output/plots/*
 !code/**/*
 !data/**/*
 .Rproj.user
+
+code/algorithm_development/*

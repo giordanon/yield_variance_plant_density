@@ -169,7 +169,7 @@ runSplits <- function(data,
   startValue <- startValue
   sigmaTune <- sigmaTune
   
-  # Parallel processing
+  # Parallel processing on each environment x treatment combination (12 splits)
   cores = ifelse(nrow(unique(data[groups]))>16,16,nrow(unique(data[groups])))
   cluster <- new_cluster(cores)
   cluster_library(cluster, c("dplyr", "purrr", "truncnorm"))
