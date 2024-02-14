@@ -570,7 +570,7 @@ comp3_sum %>%
                       
                         geom_text(data = label %>% filter(Treatment == ..1),
                                   aes(label = paste0(" p (y > 0) = ", round(value, 3)),x=YE, color = name),
-                                       fontface = "bold",size=3.5,
+                                       fontface = "bold",size=4,
                                        y= Inf, vjust = 1.2, hjust = 0.2)+
                         geom_text(data = labelSP %>% filter(Treatment == ..1),
                                   aes(label = label),
@@ -596,12 +596,9 @@ comp3_sum %>%
                                              
                                            ))
 
-ps5 <- ggarrange(plotlist = ps5$plot,  ncol = 1, nrow = 5)
+ps5 <- ggarrange(plotlist = ps5$plot,  ncol = 2, nrow = 3)
 
-ggsave(plot = ps5 , "../output/plots/supplementary/Figure 5s.png", width = 8, height = 20, dpi=600)
+ggsave(plot = ps5 , "../output/plots/supplementary/Figure 5s.png", width = 17, height = 10, dpi=600)
 ```
 
-```{r}
 
-
-```
