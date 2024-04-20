@@ -13,6 +13,6 @@ Nicolas Giordano, Dustin Hayes, Trevor J. Hefley, Josefina Lacasa, Brian Beres, 
 
 **28.visualization.qmd:** This code reproduced all figures of the manuscript.
 
-**functions.R;** Contains functions to adjust plotting aesthetics. And function compare yields and variance among treatments at the expected value of AOPD and minRPD.
+**functions.R:** Contains functions to adjust plotting aesthetics. And function compare yields and variance among treatments at the expected value of AOPD and minRPD.
 
-**MCMC REFINED.R** Contains hard-coded metropolis-hastings sampling algorithm. We include a set of functions to retrieve model derived quantities and posterior predictive distributions. 
+**MCMC REFINED.R:** Contains hard-coded metropolis-hastings sampling algorithm. We include a set of functions to retrieve model derived quantities and posterior predictive distributions. 
